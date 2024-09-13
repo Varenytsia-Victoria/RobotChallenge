@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using VictoriaVarenytsia;
 
 namespace IlnytskyiMykhailoAlgo
-{
+{ 
     public static class DistanceHelper
     {
         private const int MinPosition = 0;
