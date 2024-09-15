@@ -67,6 +67,7 @@ namespace VictoriaVarenytsia
 
             return positionToMove != null ? new MoveCommand() { NewPosition = positionToMove } : null;
         }
+
     }
 
 }
