@@ -25,6 +25,7 @@ namespace VarenytsiaVictoria.RobotChallange
         {
             var robot = robots[robotToMoveIndex];
 
+            // 1. Перевіряємо, чи немає у робота закріпленої станції.
             if (!haveEnergyStation(robotToMoveIndex))
             {
                 List<EnergyStation> energyStations = map.GetNearbyResources(robot.Position, 1000);
@@ -36,19 +37,22 @@ namespace VarenytsiaVictoria.RobotChallange
                 }
                 else
                 {
+                    // 2. Робимо випадковий хід, якщо немає вільних станцій.
                     return new MoveCommand() { NewPosition = new Position(robot.Position.X + 1, robot.Position.Y + 1) };
                 }
             }
 
             EnergyStation station = getStation(robotToMoveIndex);
 
+            // 3. Перевірка відстані до станції. Якщо далеко - рухаємося ближче.
             if (Math.Abs(station.Position.X - robot.Position.X) > 2 ||
                 Math.Abs(station.Position.Y - robot.Position.Y) > 2)
             {
                 return new MoveCommand() { NewPosition = MoveTowards(station.Position, robot.Position, robot.Energy) };
             }
 
-            if (roundNumber < 40 && robot.Energy > 600 && myRobots(robots) < 50)
+            // 4. Якщо номер раунду менший за 40 і є достатньо енергії, створюємо нового робота
+            if (roundNumber < 40 && CanCreateRobot(robot, map, robots))
             {
                 return new CreateNewRobotCommand() { NewRobotEnergy = robot.Energy - 201 };
             }
@@ -56,22 +60,41 @@ namespace VarenytsiaVictoria.RobotChallange
             Robot.Common.Robot enemyRobot = FindEnemyRobotOnStation(robots, station, robotToMoveIndex);
             if (enemyRobot != null && enemyRobot.Energy > 500)
             {
+                // Атака = рух на клітинку ворога
                 return new MoveCommand() { NewPosition = enemyRobot.Position };
             }
 
+            // 6. Якщо виявлено ворога поблизу станції - атакуємо.
             Position enemyPosition = findEnemy(map, station, robots);
             if (enemyPosition != null)
             {
                 return new MoveCommand() { NewPosition = enemyPosition };
             }
 
+            // 7. Збираємо енергію, якщо робот вже на станції.
             return new CollectEnergyCommand();
+        }
 
-        }
-        private int myRobots(IList<Robot.Common.Robot> robots)
+        // Метод для перевірки, чи може робот створити нового робота з достатньою енергією
+        private bool CanCreateRobot(Robot.Common.Robot robot, Map map, IList<Robot.Common.Robot> robots)
         {
-            return robots.Count(robot => robot.OwnerName == Author);
+            List<EnergyStation> energyStations = map.GetNearbyResources(robot.Position, 1000);
+            EnergyStation closestStation = FindClosestNotOccupiedStation(map, energyStations, robot.Position, robots);
+
+            if (closestStation == null)
+            {
+                return false;  // Немає доступних станцій
+            }
+
+            // Обчислюємо відстань до найближчої станції
+            int distanceToStation = CalculateDistance(robot.Position, closestStation.Position);
+
+            // Перевіряємо, чи вистачає енергії для переміщення нового робота до станції
+            int energyRequired = distanceToStation * 2;  // Витрати енергії на пересування
+            return robot.Energy - 201 > energyRequired;   // Залишкова енергія після створення нового робота повинна бути достатньою
         }
+
+        // Метод для пошуку найближчої незайнятої станції
         private EnergyStation FindClosestNotOccupiedStation(Map map, List<EnergyStation> stationList, Position position, IList<Robot.Common.Robot> robots)
         {
             if (stationList.Count == 0)
@@ -87,7 +110,7 @@ namespace VarenytsiaVictoria.RobotChallange
             {
                 if (!isContain(station))
                 {
-                    int road = CalculateRoad(station.Position, position);
+                    int road = CalculateDistance(station.Position, position);
                     if (road < closestRoad)
                     {
                         if (findEnemy(map, station, robots) == null)
@@ -107,6 +130,16 @@ namespace VarenytsiaVictoria.RobotChallange
             return closestStation ?? spareStation;
         }
 
+        // Метод для обчислення відстані між двома точками
+        private int CalculateDistance(Position p1, Position p2)
+        {
+            return Math.Abs(p1.X - p2.X) + Math.Abs(p1.Y - p2.Y);
+        }
+        private int myRobots(IList<Robot.Common.Robot> robots)
+        {
+            return robots.Count(robot => robot.OwnerName == Author);
+        }
+       
         private Position MoveTowards(Position targetPosition, Position currentPosition, int energy)
         {
             int deltaX = targetPosition.X - currentPosition.X;
