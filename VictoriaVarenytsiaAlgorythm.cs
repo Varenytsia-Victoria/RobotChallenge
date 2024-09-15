@@ -2,9 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static System.Collections.Specialized.BitVector32;
 
 namespace VarenytsiaVictoria.RobotChallange
 {
@@ -17,13 +14,16 @@ namespace VarenytsiaVictoria.RobotChallange
         {
             Logger.OnLogRound += Logger_OnLogRound;
         }
+
         private void Logger_OnLogRound(object sender, LogRoundEventArgs e)
         {
             roundNumber++;
         }
+
         public RobotCommand DoStep(IList<Robot.Common.Robot> robots, int robotToMoveIndex, Map map)
         {
             var robot = robots[robotToMoveIndex];
+
             if (!haveEnergyStation(robotToMoveIndex))
             {
                 List<EnergyStation> energyStations = map.GetNearbyResources(robot.Position, 1000);
@@ -40,90 +40,32 @@ namespace VarenytsiaVictoria.RobotChallange
             }
 
             EnergyStation station = getStation(robotToMoveIndex);
-            if (Math.Abs(station.Position.X - robot.Position.X) > 1 ||
-                Math.Abs(station.Position.Y - robot.Position.Y) > 1)
+
+            if (Math.Abs(station.Position.X - robot.Position.X) > 2 ||
+                Math.Abs(station.Position.Y - robot.Position.Y) > 2)
             {
                 return new MoveCommand() { NewPosition = MoveTowards(station.Position, robot.Position, robot.Energy) };
             }
 
-            if (roundNumber < 17)
+            if (roundNumber < 30 && robot.Energy > 700)
             {
-                //if (robot.Energy > 1000)
-                //{
-                //    return new CreateNewRobotCommand() { NewRobotEnergy = robot.Energy - 201 };
-                //}
-            }
-            else if (roundNumber < 45 && myRobots(robots) < 101)
-            {
-                if (robot.Energy > 800)
-                {
-                    return new CreateNewRobotCommand() { NewRobotEnergy = robot.Energy - 201 };
-                }
+                return new CreateNewRobotCommand() { NewRobotEnergy = robot.Energy - 201 };
             }
 
-            Position position = findEnemy(map, station, robots);
-            if (position != null)
+           
+            Robot.Common.Robot enemyRobot = FindEnemyRobotOnStation(robots, station, robotToMoveIndex);
+            if (enemyRobot != null && enemyRobot.Energy > 300) 
             {
-                return new MoveCommand()
-                {
-                    NewPosition = position
-
-                };
+                return new MoveCommand() { NewPosition = enemyRobot.Position };
             }
 
-            return new CollectEnergyCommand() { };
-
-        }
-
-        private int myRobots(IList<Robot.Common.Robot> robots)
-        {
-            return robots.Count(robot => robot.OwnerName == Author);
-        }
-        public string Author { get { return "Varenytsia Victoria"; } }
-
-        private int CalculateRoad(Position p1, Position p2)
-        {
-            return (p1.X - p2.X) * (p1.X - p2.X) + (p1.Y - p2.Y) * (p1.Y - p2.Y);
-        }
-
-        private Position MoveTowards(Position B, Position A, int energy)
-        {
-            if (energy > 15)
+            Position enemyPosition = findEnemy(map, station, robots);
+            if (enemyPosition != null)
             {
-                while (Math.Pow(B.X - A.X, 2) + Math.Pow(B.Y - A.Y, 2) > energy)
-                {
-                    if (B.X > A.X)
-                    {
-                        B.X--;
-                    }
-                    else if (B.X < A.X)
-                    {
-                        B.X++;
-                    }
-
-                    if (B.Y > A.Y)
-                    {
-                        B.Y--;
-                    }
-                    else if (B.Y < A.Y)
-                    {
-                        B.Y++;
-                    }
-                }
-
-                return new Position(B.X, B.Y);
+                return new MoveCommand() { NewPosition = enemyPosition };
             }
 
-            int deltaX = B.X - A.X;
-            int deltaY = B.Y - A.Y;
-            int deltaXMOD = Math.Abs(B.X - A.X);
-            int deltaYMOD = Math.Abs(B.Y - A.Y);
-
-            int maxGo = 2;
-
-            int newX = A.X + (deltaXMOD == 0 ? 0 : Math.Min(maxGo, deltaXMOD) * (deltaX / deltaXMOD));
-            int newY = A.Y + (deltaYMOD == 0 ? 0 : Math.Min(maxGo, deltaYMOD) * (deltaY / deltaYMOD));
-            return new Position(newX, newY);
+            return new CollectEnergyCommand();
         }
 
         private EnergyStation FindClosestNotOccupiedStation(Map map, List<EnergyStation> stationList, Position position, IList<Robot.Common.Robot> robots)
@@ -134,31 +76,26 @@ namespace VarenytsiaVictoria.RobotChallange
             }
             EnergyStation closestStation = null;
             EnergyStation spareStation = null;
-            int closestRoad = Int32.MaxValue;
-            int spareRoad = Int32.MaxValue;
+            int closestRoad = int.MaxValue;
+            int spareRoad = int.MaxValue;
+
             foreach (var station in stationList)
             {
                 if (!isContain(station))
                 {
                     int road = CalculateRoad(station.Position, position);
-                    if (road < closestRoad/*&& checkStation(robots, station, position)*/)
+                    if (road < closestRoad)
                     {
                         if (findEnemy(map, station, robots) == null)
                         {
                             closestStation = station;
                             closestRoad = road;
+                        }
+                        else if (road < spareRoad)
+                        {
                             spareStation = station;
                             spareRoad = road;
                         }
-                        else
-                        {
-                            if (road < spareRoad)
-                            {
-                                spareStation = station;
-                                spareRoad = road;
-                            }
-                        }
-
                     }
                 }
             }
@@ -166,34 +103,25 @@ namespace VarenytsiaVictoria.RobotChallange
             return closestStation ?? spareStation;
         }
 
-        private bool checkStation(IList<Robot.Common.Robot> robots, EnergyStation station, Position robotPosition)
+        private Position MoveTowards(Position targetPosition, Position currentPosition, int energy)
         {
-            List<Robot.Common.Robot> myRobots = robots.Where(robot => robot.OwnerName.Equals(Author)).Where(robot => !myStations.ContainsKey(robots.IndexOf(robot))).ToList();
+            int deltaX = targetPosition.X - currentPosition.X;
+            int deltaY = targetPosition.Y - currentPosition.Y;
+            int maxMove = 2; 
 
-            Robot.Common.Robot closestRobot = myRobots
-                .OrderBy(robot => CalculateRoad(robot.Position, station.Position))
-                .FirstOrDefault();
+            int newX = currentPosition.X + Math.Min(maxMove, Math.Abs(deltaX)) * Math.Sign(deltaX);
+            int newY = currentPosition.Y + Math.Min(maxMove, Math.Abs(deltaY)) * Math.Sign(deltaY);
 
-            return closestRobot.Position.X == robotPosition.X && closestRobot.Position.Y == robotPosition.Y;
+            return new Position(newX, newY);
         }
 
-        private bool haveEnergyStation(int id)
+        private Robot.Common.Robot FindEnemyRobotOnStation(IList<Robot.Common.Robot> robots, EnergyStation station, int currentRobotIndex)
         {
-            return myStations.ContainsKey(id);
-        }
-
-        private bool isContain(EnergyStation station)
-        {
-            foreach (var kvp in myStations)
-            {
-                if (kvp.Value.Position.X == station.Position.X && kvp.Value.Position.Y == station.Position.Y)
-                {
-                    return true;
-                }
-
-            }
-
-            return false;
+            return robots.FirstOrDefault(robot =>
+                robot.Position.X == station.Position.X &&
+                robot.Position.Y == station.Position.Y &&
+                robot.OwnerName != Author &&
+                robot.Energy > 30);
         }
 
         private Position findEnemy(Map map, EnergyStation station, IList<Robot.Common.Robot> robots)
@@ -213,7 +141,6 @@ namespace VarenytsiaVictoria.RobotChallange
                 { 0, 1 }
             };
 
-
             for (int i = 0; i < offsets.GetLength(0); i++)
             {
                 Position newPosition = new Position
@@ -229,20 +156,46 @@ namespace VarenytsiaVictoria.RobotChallange
                     {
                         return newPosition;
                     }
-
                 }
             }
 
             return null;
         }
-        private EnergyStation getStation(int id)
-        {
-            return myStations[id];
-        }
+
         private Robot.Common.Robot FindRobotAtPosition(IList<Robot.Common.Robot> robots, Position targetPosition)
         {
             return robots.FirstOrDefault(robot => robot.Position.X == targetPosition.X &&
                                                   robot.Position.Y == targetPosition.Y);
         }
+
+        private bool haveEnergyStation(int id)
+        {
+            return myStations.ContainsKey(id);
+        }
+
+        private bool isContain(EnergyStation station)
+        {
+            foreach (var kvp in myStations)
+            {
+                if (kvp.Value.Position.X == station.Position.X && kvp.Value.Position.Y == station.Position.Y)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private EnergyStation getStation(int id)
+        {
+            return myStations[id];
+        }
+
+        private int CalculateRoad(Position p1, Position p2)
+        {
+            return (p1.X - p2.X) * (p1.X - p2.X) + (p1.Y - p2.Y) * (p1.Y - p2.Y);
+        }
+
+        public string Author => "Varenytsia Victoria";
     }
 }
