@@ -7,7 +7,8 @@ namespace VarenytsiaVictoria.RobotChallange
 {
     internal class VarenytsiaVictoriaAlgorithm : IRobotAlgorithm
     {
-        private int roundNumber;
+
+        private int roundNumber = 0;
         private Dictionary<int, EnergyStation> myStations = new Dictionary<int, EnergyStation>();
 
         public VarenytsiaVictoriaAlgorithm()
@@ -47,14 +48,13 @@ namespace VarenytsiaVictoria.RobotChallange
                 return new MoveCommand() { NewPosition = MoveTowards(station.Position, robot.Position, robot.Energy) };
             }
 
-            if (roundNumber < 30 && robot.Energy > 700)
+            if (roundNumber < 40 && robot.Energy > 600 && myRobots(robots) < 50)
             {
                 return new CreateNewRobotCommand() { NewRobotEnergy = robot.Energy - 201 };
             }
 
-           
             Robot.Common.Robot enemyRobot = FindEnemyRobotOnStation(robots, station, robotToMoveIndex);
-            if (enemyRobot != null && enemyRobot.Energy > 300) 
+            if (enemyRobot != null && enemyRobot.Energy > 500)
             {
                 return new MoveCommand() { NewPosition = enemyRobot.Position };
             }
@@ -66,8 +66,12 @@ namespace VarenytsiaVictoria.RobotChallange
             }
 
             return new CollectEnergyCommand();
-        }
 
+        }
+        private int myRobots(IList<Robot.Common.Robot> robots)
+        {
+            return robots.Count(robot => robot.OwnerName == Author);
+        }
         private EnergyStation FindClosestNotOccupiedStation(Map map, List<EnergyStation> stationList, Position position, IList<Robot.Common.Robot> robots)
         {
             if (stationList.Count == 0)
